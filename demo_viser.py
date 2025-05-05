@@ -268,7 +268,6 @@ def viser_wrapper(
 
 # Helper functions for sky segmentation
 
-
 def apply_sky_segmentation(conf: np.ndarray, image_folder: str) -> np.ndarray:
     """
     Apply sky segmentation to confidence scores.
@@ -320,16 +319,20 @@ def apply_sky_segmentation(conf: np.ndarray, image_folder: str) -> np.ndarray:
 
 
 parser = argparse.ArgumentParser(description="VGGT demo with viser for 3D visualization")
-parser.add_argument(
-    "--image_folder", type=str, default="examples/kitchen/images/", help="Path to folder containing images"
-)
-parser.add_argument("--use_point_map", action="store_true", help="Use point map instead of depth-based points")
-parser.add_argument("--background_mode", action="store_true", help="Run the viser server in background mode")
-parser.add_argument("--port", type=int, default=8080, help="Port number for the viser server")
-parser.add_argument(
-    "--conf_threshold", type=float, default=25.0, help="Initial percentage of low-confidence points to filter out"
-)
-parser.add_argument("--mask_sky", action="store_true", help="Apply sky segmentation to filter out sky points")
+parser.add_argument("--image_folder", type=str, default="examples/kitchen/images_2/", 
+                    help="Path to folder containing images")
+parser.add_argument("--model_path", type=str, default="../models/model-vggt-1B.pt",
+                    help="Path to the pretrained model")
+parser.add_argument("--use_point_map", action="store_true", 
+                    help="Use point map instead of depth-based points")
+parser.add_argument("--background_mode", action="store_true", 
+                    help="Run the viser server in background mode")
+parser.add_argument("--port", type=int, default=8080, 
+                    help="Port number for the viser server")
+parser.add_argument("--conf_threshold", type=float, default=25.0, 
+                    help="Initial percentage of low-confidence points to filter out")
+parser.add_argument("--mask_sky", action="store_true", 
+                    help="Apply sky segmentation to filter out sky points")
 
 
 def main():
@@ -359,8 +362,11 @@ def main():
     # model = VGGT.from_pretrained("facebook/VGGT-1B")
 
     model = VGGT()
-    _URL = "https://huggingface.co/facebook/VGGT-1B/resolve/main/model.pt"
-    model.load_state_dict(torch.hub.load_state_dict_from_url(_URL))
+    if len(args.model_path) < 5:
+        _URL = "https://huggingface.co/facebook/VGGT-1B/resolve/main/model.pt"
+        model.load_state_dict(torch.hub.load_state_dict_from_url(_URL))
+    else:
+        model.load_state_dict(torch.load(args.model_path, weights_only=True, map_location=device))
 
     model.eval()
     model = model.to(device)
@@ -377,7 +383,7 @@ def main():
     dtype = torch.bfloat16 if torch.cuda.get_device_capability()[0] >= 8 else torch.float16
 
     with torch.no_grad():
-        with torch.cuda.amp.autocast(dtype=dtype):
+        with torch.amp.autocast(dtype=dtype, device_type=device):
             predictions = model(images)
 
     print("Converting pose encoding to extrinsic and intrinsic matrices...")
