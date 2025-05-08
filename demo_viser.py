@@ -25,10 +25,11 @@ except ImportError:
     print("onnxruntime not found. Sky segmentation may not work.")
 
 from visual_util import segment_sky, download_file_from_url
-from vggt.models.vggt import VGGT
+from vggt.models.vggt import VGGT as DeflowNet
 from vggt.utils.load_fn import load_and_preprocess_images
 from vggt.utils.geometry import closed_form_inverse_se3, unproject_depth_map_to_point_map
 from vggt.utils.pose_enc import pose_encoding_to_extri_intri
+from vggt.utils.analysis import param_histogram
 
 
 def viser_wrapper(
@@ -321,6 +322,8 @@ def apply_sky_segmentation(conf: np.ndarray, image_folder: str) -> np.ndarray:
 parser = argparse.ArgumentParser(description="VGGT demo with viser for 3D visualization")
 parser.add_argument("--image_folder", type=str, default="examples/kitchen/images_2/", 
                     help="Path to folder containing images")
+parser.add_argument("--image_path", type=str, default=None, 
+                    help="Path to a single image for reconstruction")
 parser.add_argument("--model_path", type=str, default="../models/model-vggt-1B.pt",
                     help="Path to the pretrained model")
 parser.add_argument("--use_point_map", action="store_true", 
@@ -358,10 +361,10 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {device}")
 
-    print("Initializing and loading VGGT model...")
-    # model = VGGT.from_pretrained("facebook/VGGT-1B")
-
-    model = VGGT()
+    print("Initializing and loading pre-trained model...")
+    # model = DeflowNet.from_pretrained("facebook/VGGT-1B")
+    
+    model = DeflowNet()
     if len(args.model_path) < 5:
         _URL = "https://huggingface.co/facebook/VGGT-1B/resolve/main/model.pt"
         model.load_state_dict(torch.hub.load_state_dict_from_url(_URL))
@@ -371,10 +374,12 @@ def main():
     model.eval()
     model = model.to(device)
 
-    # Use the provided image folder path
-    print(f"Loading images from {args.image_folder}...")
-    image_names = glob.glob(os.path.join(args.image_folder, "*"))
-    print(f"Found {len(image_names)} images")
+    if args.image_path is None:
+        # Use the provided image folder path
+        print(f"Loading images from {args.image_folder}...")
+        image_names = glob.glob(os.path.join(args.image_folder, "*"))
+        print(f"Found {len(image_names)} images")
+    else: image_names = [args.image_path]
 
     images = load_and_preprocess_images(image_names).to(device)
     print(f"Preprocessed images shape: {images.shape}")
