@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) Bluewhale Intelligent Platforms.
 # All rights reserved.
 #
 # This source code is licensed under the license found in the
@@ -39,7 +39,7 @@ def viser_wrapper(
     use_point_map: bool = False,
     background_mode: bool = False,
     mask_sky: bool = False,
-    image_folder: str = None,
+    image_folder: Optional[str] = None,
 ):
     """
     Visualize predicted 3D points and camera poses with viser.
@@ -248,7 +248,7 @@ def viser_wrapper(
             fr.visible = gui_show_frames.value
 
     # Add the camera frames to the scene
-    visualize_frames(cam_to_world, images)
+    visualize_frames(cam_to_world, images) # type: ignore
 
     print("Starting viser server...")
     # If background_mode is True, spawn a daemon thread so the main thread can continue.
