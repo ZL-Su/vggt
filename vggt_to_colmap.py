@@ -20,19 +20,13 @@ from vggt.utils.geometry import unproject_depth_map_to_point_map
 
 def load_model(device=None):
     """Load and initialize the VGGT model."""
-    if device is None:
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+    if device is None: device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {device}")
     
-    model = VGGT.from_pretrained("facebook/VGGT-1B")
-
-    # model = VGGT()
-    # _URL = "https://huggingface.co/facebook/VGGT-1B/resolve/main/model.pt"
-    # model.load_state_dict(torch.hub.load_state_dict_from_url(_URL))
-    
+    model = VGGT.from_pretrained("../models/model-vggt-1B.pt").to(device)
     model.eval()
-    model = model.to(device)
-    return model, device
+    
+    return model.to(device), device
 
 def process_images(image_dir, model, device):
     """Process images with VGGT and return predictions."""
