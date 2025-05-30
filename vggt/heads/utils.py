@@ -20,7 +20,7 @@ def position_grid_to_embed(pos_grid: torch.Tensor, embed_dim: int, omega_0: floa
         Tensor of shape (H, W, embed_dim) with positional embeddings
     """
     H, W, grid_dim = pos_grid.shape
-    assert grid_dim == 2
+    torch._assert(grid_dim == 2, "the dimension of the pos_grid must be 2")
     pos_flat = pos_grid.reshape(-1, grid_dim)  # Flatten to (H*W, 2)
 
     # Process x and y coordinates separately
@@ -44,7 +44,7 @@ def make_sincos_pos_embed(embed_dim: int, pos: torch.Tensor, omega_0: float = 10
     Returns:
     - emb: The generated 1D positional embedding.
     """
-    assert embed_dim % 2 == 0
+    torch._assert(embed_dim % 2 == 0, "embed_dim must be even for RoPE")
     device = pos.device
     omega = torch.arange(embed_dim // 2, dtype=torch.float32 if device.type == "mps" else torch.double, device=device)
     omega /= embed_dim / 2.0
