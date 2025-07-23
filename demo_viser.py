@@ -31,6 +31,10 @@ from vggt.utils.geometry import closed_form_inverse_se3, unproject_depth_map_to_
 from vggt.utils.pose_enc import pose_encoding_to_extri_intri
 from vggt.utils.analysis import param_histogram
 
+def blocked(*args, **kwargs):
+    raise RuntimeError("Found unexpected use of torch.cartesian_prod")
+
+torch.expm1 = blocked  # Prevent cartesian product usage in the model
 
 def viser_wrapper(
     pred_dict: dict,
@@ -253,7 +257,6 @@ def viser_wrapper(
     print("Starting viser server...")
     # If background_mode is True, spawn a daemon thread so the main thread can continue.
     if background_mode:
-
         def server_loop():
             while True:
                 time.sleep(0.001)
@@ -268,7 +271,6 @@ def viser_wrapper(
 
 
 # Helper functions for sky segmentation
-
 def apply_sky_segmentation(conf: np.ndarray, image_folder: str) -> np.ndarray:
     """
     Apply sky segmentation to confidence scores.
@@ -285,7 +287,7 @@ def apply_sky_segmentation(conf: np.ndarray, image_folder: str) -> np.ndarray:
     os.makedirs(sky_masks_dir, exist_ok=True)
 
     # Download skyseg.onnx if it doesn't exist
-    if not os.path.exists("skyseg.onnx"):
+    if not os.path.exists("../models/skyseg.onnx"):
         print("Downloading skyseg.onnx...")
         download_file_from_url("https://huggingface.co/JianyuanWang/skyseg/resolve/main/skyseg.onnx", "skyseg.onnx")
 
@@ -362,7 +364,6 @@ def main():
     print(f"Using device: {device}")
 
     print("Initializing and loading pre-trained model...")
-    # model = DeflowNet.from_pretrained("facebook/VGGT-1B")
     
     model = DeflowNet()
     if len(args.model_path) < 5:
@@ -373,7 +374,6 @@ def main():
 
     model.eval()
     model = model.to(device)
-
     if args.image_path is None:
         # Use the provided image folder path
         print(f"Loading images from {args.image_folder}...")
@@ -383,18 +383,21 @@ def main():
 
     images = load_and_preprocess_images(image_names).to(device)
     print(f"Preprocessed images shape: {images.shape}")
+    _, _, H, W = images.shape
 
     print("Running inference...")    
     dtype = torch.bfloat16 if torch.cuda.get_device_capability()[0] >= 8 else torch.float16
+    dtype = torch.float16
 
     with torch.no_grad():
         with torch.amp.autocast(dtype=dtype, device_type=device):
-            predictions = model(images)
+            predictions = model(images, query_points=torch.tensor([[W//2, H//2]]).to(device))
 
     print("Converting pose encoding to extrinsic and intrinsic matrices...")
     extrinsic, intrinsic = pose_encoding_to_extri_intri(predictions["pose_enc"], images.shape[-2:])
     predictions["extrinsic"] = extrinsic
     predictions["intrinsic"] = intrinsic
+    tracks = predictions["track"]
 
     print("Processing model outputs...")
     for key in predictions.keys():
@@ -424,4 +427,25 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    export_as_onnx = False
+    if export_as_onnx:
+        print("Exporting model to ONNX format...")
+        model_onnx = DeflowNet()
+        model_onnx.load_state_dict(torch.load("../models/model-vggt-1B.pt", weights_only=True, map_location="cpu"))
+        model_onnx.eval()
+        dummy_input = torch.randn(1, 3, 518, 518)
+        torch.onnx.export(model_onnx, dummy_input, 
+                          "../models/deflow_vgt_onnx/deflow_model.onnx", 
+                          export_params=True,
+                          opset_version=17,  # Use a recent opset version
+                          do_constant_folding=True,
+                          input_names=['input'],
+                          output_names=['output'],
+                          dynamic_shapes={
+                              'input': {0: 'batch_size', 2: 'height', 3: 'width'},
+                              'output': {0: 'batch_size'}
+                          },
+                          use_external_data_format=True,
+                          dynamo=True
+                         )
+    else: main()
