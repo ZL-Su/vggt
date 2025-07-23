@@ -122,4 +122,5 @@ def inverse_log_transform(y):
     Returns:
         Transformed tensor
     """
-    return torch.sign(y) * (torch.expm1(torch.abs(y)))
+    #return torch.sign(y) * (torch.expm1(torch.abs(y)))
+    return torch.sign(y) * (torch.exp(torch.abs(y))-1)
