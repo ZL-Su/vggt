@@ -20,6 +20,18 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Dict, Tuple
 
+def cartesian_product_onnxportable(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+    """
+    Emulate torch.cartesian_prod(a, b) without using torch.cartesian_prod.
+    a: Tensor of shape [m]
+    b: Tensor of shape [n]
+    Returns: Tensor of shape [m*n, 2]
+    """
+    a = a.unsqueeze(1)           # [m, 1]
+    b = b.unsqueeze(0)           # [1, n]
+    A = a.expand(-1, b.size(1))  # [m, n]
+    B = b.expand(a.size(0), -1)  # [m, n]
+    return torch.stack((A.reshape(-1), B.reshape(-1)), dim=1)
 
 class PositionGetter:
     """Generates and caches 2D spatial positions for patches in a grid.
@@ -49,13 +61,15 @@ class PositionGetter:
             Tensor of shape (batch_size, height*width, 2) containing y,x coordinates
             for each position in the grid, repeated for each batch item.
         """
-        if (height, width) not in self.position_cache:
+        shape = ((int(height), int(width)) if not isinstance(height, torch.SymInt) else (int(height.item()), int(width.item())))
+        if shape not in self.position_cache:
             y_coords = torch.arange(height, device=device)
             x_coords = torch.arange(width, device=device)
-            positions = torch.cartesian_prod(y_coords, x_coords)
-            self.position_cache[height, width] = positions
+            #positions = torch.cartesian_prod(y_coords, x_coords)
+            positions = cartesian_product_onnxportable(y_coords, x_coords)
+            self.position_cache[shape] = positions
 
-        cached_positions = self.position_cache[height, width]
+        cached_positions = self.position_cache[shape]
         return cached_positions.view(1, height * width, 2).expand(batch_size, -1, -1).clone()
 
 
